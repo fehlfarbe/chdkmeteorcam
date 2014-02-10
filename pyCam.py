@@ -12,14 +12,27 @@ import numpy
 from gi.repository import GExiv2
 import astroscripts as astro
 
+# script saves images in SAVEDIR/YEAR/YEAR-MONTH-DAY
 SAVEDIR = "./capture/"
+# directory for darks, just save dark.png in this dir for darkframe substraction
 DARKDIR  = "./darks/"
+# files will be copied to this server (archive)
 SERVERDIR = "/mnt/allsky"
+# path of compiled ptpcam (chdk) binary
+PTPCAM = "./ptpcam"
+# latitude / longitude
 LAT = 51.05
 LON = 14
+# GPIO pin which controls the camera on/off
 GPIOPIN = 7
+# number of darks for masterdark creation
 DARKCOUNT = 4
+# maximum sun altitude for imaging
 SOLALT = 12
+
+
+
+
 
 def getDark():
     if os.path.exists('dark.png'):
@@ -51,7 +64,9 @@ def moveToServer():
         print "delete %s" % d
         shutil.rmtree(os.path.join(SAVEDIR, d))
         
-
+'''
+substracts darkfarme, adds border with text and exif data and saves it
+'''
 def postProcess(filename, dst, dt, tv, iso):
     
     ### edit exif / get exif data
@@ -111,6 +126,9 @@ def postProcess(filename, dst, dt, tv, iso):
     os.remove(filename)
 
 
+'''
+Downloads image from camera to tmp and starts postprocessing in new thread
+'''
 def downloadAndProcess(path, dt, tv, iso):
     ### create folder if not exists
     directory = dt.strftime('%Y/%Y-%m-%d/')
@@ -122,7 +140,7 @@ def downloadAndProcess(path, dt, tv, iso):
     tmpname = os.path.join('/tmp/', "%s.jpg" % time)
     
     cmd = 'download %s %s' % (path, tmpname)
-    process = subprocess.Popen(['./ptpcam', '--chdk'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+    process = subprocess.Popen([PTPCAM, '--chdk'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
     response = process.communicate( cmd )
     
     ### test error
@@ -133,7 +151,7 @@ def downloadAndProcess(path, dt, tv, iso):
     
     ### start postProcess in new thread
     thread.start_new_thread(postProcess, (tmpname, filename, dt, tv, iso))
-    
+   
 def turnOn():
     subprocess.Popen('gpio -g mode %d out' % GPIOPIN, shell=True)
     subprocess.Popen('gpio -g write %d 1' % GPIOPIN, shell=True)
@@ -154,7 +172,7 @@ def checkSuccess(response):
 
 def getMsg():
     print "getMSG"
-    process = subprocess.Popen(['./ptpcam', '--chdk'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+    process = subprocess.Popen([PTPCAM, '--chdk'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
     response = process.communicate('getm')
         
     if checkSuccess(response):
@@ -173,7 +191,7 @@ def releaseCam():
 def initCam():
     print "Init Camera"
     turnOn()
-    process = subprocess.Popen(['./ptpcam', '--chdk'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+    process = subprocess.Popen([PTPCAM, '--chdk'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
     response = process.communicate("""mode 1
 upload ./lua/meteorutils.lua A/CHDK/SCRIPTS/meteorutils.lua
 upload ./lua/meteorcam.lua A/CHDK/SCRIPTS/meteorcam.lua
@@ -214,7 +232,7 @@ def takeMasterdarkDark(n):
     print 'Take Masterdark'
     
     while not success:
-        process = subprocess.Popen(['./ptpcam', '--chdk'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+        process = subprocess.Popen([PTPCAM, '--chdk'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
         response = process.communicate("""mode 1
 lua loadfile("A/CHDK/SCRIPTS/meteordark.lua")(%d)
         """ % n)
@@ -298,7 +316,7 @@ if __name__ == '__main__':
             if not active:
                 restart()
                 active = True
-            process = subprocess.Popen(['./ptpcam', '--chdk'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+            process = subprocess.Popen([PTPCAM, '--chdk'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
             response = process.communicate('getm')
                 
             if checkSuccess(response):
