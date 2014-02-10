@@ -1,0 +1,4 @@
+chdkmeteorcam
+=============
+
+CHDK based meteorcam
